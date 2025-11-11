@@ -107,21 +107,35 @@ class StartScene extends Phaser.Scene {
   startMenuMusic() {
     this.musicPlaying = true;
     this.musicTimer = 0;
-    this.musicNoteIndex = 0;
-    // Melodía suave y calmada para el menú
-    this.musicNotes = [330, 349, 392, 440, 392, 349, 330, 294];
+    this.bassTimer = 0;
+    this.noteIndex = 0;
+    
+    // Arpegio suave en Do mayor (C, E, G)
+    this.arpeggio = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63];
+    this.bassLine = [130.81, 146.83, 164.81, 130.81]; // C3, D3, E3, C3
+    this.bassIndex = 0;
   }
 
   update(time, delta) {
     if (!this.musicPlaying) return;
 
     this.musicTimer += delta;
-    if (this.musicTimer >= 300) {
+    this.bassTimer += delta;
+
+    // Tocar nota del arpegio
+    if (this.musicTimer >= 200) { // Ritmo más rápido
       this.musicTimer = 0;
-      const note =
-        this.musicNotes[this.musicNoteIndex % this.musicNotes.length];
-      this.playTone(note, 250, 0.04, "sine");
-      this.musicNoteIndex++;
+      const note = this.arpeggio[this.noteIndex % this.arpeggio.length];
+      this.playTone(note, 0.15, 0.08, "triangle"); // Onda triangular, más suave que sine
+      this.noteIndex++;
+    }
+    
+    // Tocar nota del bajo
+    if (this.bassTimer >= 1600) { // El bajo es más lento
+      this.bassTimer = 0;
+      const bassNote = this.bassLine[this.bassIndex % this.bassLine.length];
+      this.playTone(bassNote, 0.6, 0.1, "sine");
+      this.bassIndex++;
     }
   }
 
@@ -134,7 +148,7 @@ class StartScene extends Phaser.Scene {
     osc.frequency.value = freq;
     osc.type = type;
     gain.gain.setValueAtTime(vol, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + dur);
   }
@@ -465,39 +479,35 @@ class GameScene extends Phaser.Scene {
   draw() {
     this.graphics.clear();
 
-    // Círculos concéntricos decorativos (órbitas internas) - solo decorativos
+    // Círculos concéntricos decorativos (órbitas internas) con glow fluyente
     const orbit1Radius = this.arenaRadius * 0.4;
     const orbit2Radius = this.arenaRadius * 0.65;
     
-    // Órbita interna 1
-    this.graphics.lineStyle(2, 0xffff00, 0.4);
-    this.graphics.strokeCircle(
+    // Órbita interna 1 con glow fluyente
+    this.drawFlowingGlowCircle(
       this.arenaCenterX,
       this.arenaCenterY,
-      orbit1Radius
+      orbit1Radius,
+      0xffff00,
+      3
     );
     
-    // Órbita interna 2
-    this.graphics.lineStyle(2, 0xffaa00, 0.4);
-    this.graphics.strokeCircle(
+    // Órbita interna 2 con glow fluyente
+    this.drawFlowingGlowCircle(
       this.arenaCenterX,
       this.arenaCenterY,
-      orbit2Radius
+      orbit2Radius,
+      0xffaa00,
+      3
     );
 
-    // Arena circular con glow (dibujar glow primero)
-    this.drawGlowCircle(
+    // Arena circular con glow fluyente (solo borde, sin relleno)
+    this.drawFlowingGlowCircle(
       this.arenaCenterX,
       this.arenaCenterY,
       this.arenaRadius,
       0x00ffff,
-      1
-    );
-    this.graphics.lineStyle(3, 0x00ffff, 1);
-    this.graphics.strokeCircle(
-      this.arenaCenterX,
-      this.arenaCenterY,
-      this.arenaRadius
+      4
     );
 
     // Zonas seguras con glow y colores aleatorios
@@ -582,54 +592,133 @@ class GameScene extends Phaser.Scene {
     }
   }
 
-  startBackgroundMusic() {
-    if (!this.musicPlaying) {
-      this.musicPlaying = true;
-      this.musicTimer = 0;
-      this.musicNoteIndex = 0;
-      this.musicPattern = 0;
-      this.musicBeatCount = 0;
-      // Múltiples patrones musicales para variar
-      this.musicPatterns = [
-        [262, 330, 392, 440, 392, 330], // Patrón 1: ascendente-descendente
-        [294, 349, 440, 523, 440, 349], // Patrón 2: más agudo
-        [330, 392, 494, 523, 494, 392], // Patrón 3: aún más agudo
-        [262, 294, 330, 349, 392, 440, 494, 523], // Patrón 4: escala completa
-      ];
+  drawFlowingGlowCircle(x, y, radius, color, lineWidth) {
+    // Efecto de glow fluyente alrededor del círculo
+    const flowSpeed = 0.001; // Velocidad del flujo
+    const flowOffset = (this.gameTime * flowSpeed) % (Math.PI * 2);
+    const segments = 80; // Número de segmentos para suavidad
+    const glowIntensity = 0.9; // Intensidad máxima del glow
+    
+    // Dibujar múltiples capas de glow para efecto acentuado
+    for (let layer = 0; layer < 4; layer++) {
+      const layerRadius = radius + layer * 1.5;
+      const layerAlpha = (glowIntensity * 0.5) / (layer + 1);
+      
+      // Dibujar el círculo con brillo variable usando líneas
+      for (let i = 0; i < segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        const nextAngle = ((i + 1) / segments) * Math.PI * 2;
+        
+        // Calcular brillo basado en la posición del flujo
+        const angleForFlow = (angle + flowOffset) % (Math.PI * 2);
+        const flowValue = (Math.sin(angleForFlow) + 1) / 2; // 0 a 1
+        const segmentAlpha = layerAlpha * (0.4 + flowValue * 0.6);
+        const segmentWidth = lineWidth * (0.6 + flowValue * 0.4);
+        
+        // Calcular puntos del segmento
+        const x1 = x + Math.cos(angle) * layerRadius;
+        const y1 = y + Math.sin(angle) * layerRadius;
+        const x2 = x + Math.cos(nextAngle) * layerRadius;
+        const y2 = y + Math.sin(nextAngle) * layerRadius;
+        
+        // Dibujar línea del segmento
+        this.graphics.lineStyle(segmentWidth, color, segmentAlpha);
+        this.graphics.moveTo(x1, y1);
+        this.graphics.lineTo(x2, y2);
+      }
     }
+    
+    // Borde principal más brillante y continuo
+    this.graphics.lineStyle(lineWidth, color, glowIntensity);
+    this.graphics.strokeCircle(x, y, radius);
+  }
+
+  startBackgroundMusic() {
+    this.musicPlaying = true;
+    this.musicTimer = 0;
+    this.beatCount = 0;
+    this.arpeggioIndex = 0;
+    this.patternIndex = 0;
+
+    // Patrones de arpegios (en Do menor para un ambiente más intenso)
+    this.arpeggioPatterns = [
+      [261.63, 311.13, 392.00, 523.25], // Cm, Eb, G, C
+      [293.66, 349.23, 440.00, 587.33], // Dm, F, A, D
+      [311.13, 369.99, 466.16, 622.25]  // Eb, G, Bb, Eb
+    ];
+    this.bassLine = [130.81, 146.83, 155.56]; // C3, D3, Eb3
   }
 
   updateBackgroundMusic(delta) {
     if (!this.musicPlaying) return;
 
-    // Velocidad dinámica basada en el tiempo de juego y score
-    const intensity = Math.min(1, this.gameTime / 30000 + this.score / 5000);
-    const baseSpeed = 180 - intensity * 60; // Más rápido cuando hay más intensidad
-    const speed = Math.max(120, baseSpeed);
-
     this.musicTimer += delta;
-    if (this.musicTimer >= speed) {
-      this.musicTimer = 0;
-      this.musicBeatCount++;
+    const beatDuration = 150; // 150ms por beat, para un ritmo rápido
 
-      // Cambiar patrón cada 16 beats para evitar repetición
-      if (this.musicBeatCount % 16 === 0) {
-        this.musicPattern = (this.musicPattern + 1) % this.musicPatterns.length;
-        this.musicNoteIndex = 0;
+    if (this.musicTimer >= beatDuration) {
+      this.musicTimer -= beatDuration;
+
+      // Kick drum en los tiempos 1 y 3
+      if (this.beatCount % 4 === 0 || this.beatCount % 4 === 2) {
+        this.playKick();
+      }
+      
+      // Hi-hat en los tiempos 2 y 4
+      if (this.beatCount % 4 === 1 || this.beatCount % 4 === 3) {
+        this.playHiHat();
       }
 
-      const currentPattern = this.musicPatterns[this.musicPattern];
-      const note = currentPattern[this.musicNoteIndex % currentPattern.length];
+      // Tocar nota del arpegio
+      const arpeggio = this.arpeggioPatterns[this.patternIndex];
+      const note = arpeggio[this.arpeggioIndex % arpeggio.length];
+      this.playTone(note, 0.1, 0.07, "sawtooth");
+      this.arpeggioIndex++;
 
-      // Volumen dinámico basado en intensidad
-      const volume = 0.04 + intensity * 0.03;
+      // Cambiar de bajo y patrón cada 16 beats
+      if (this.beatCount > 0 && this.beatCount % 16 === 0) {
+        this.patternIndex = (this.patternIndex + 1) % this.arpeggioPatterns.length;
+        const bassNote = this.bassLine[this.patternIndex % this.bassLine.length];
+        this.playTone(bassNote, 0.5, 0.15, "square");
+      }
 
-      // Duración más corta para ritmo más dinámico
-      const duration = 120 - intensity * 30;
-
-      this.playTone(note, duration, volume, "sine");
-      this.musicNoteIndex++;
+      this.beatCount++;
     }
+  }
+
+  playKick() {
+    const ctx = this.sound.context;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    
+    osc.frequency.setValueAtTime(120, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.1);
+    
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.15);
+  }
+
+  playHiHat() {
+    const ctx = this.sound.context;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    osc.type = 'square'; // Ruido blanco es mejor, pero square es una buena aproximación
+    gain.gain.setValueAtTime(0.03, ctx.currentTime);
+    osc.frequency.setValueAtTime(6000 + Math.random() * 4000, ctx.currentTime); // Frecuencia alta
+    
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+    
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.05);
   }
 
   playTone(freq, dur, vol = 0.1, type = "square") {
@@ -641,7 +730,7 @@ class GameScene extends Phaser.Scene {
     osc.frequency.value = freq;
     osc.type = type;
     gain.gain.setValueAtTime(vol, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + dur);
   }
@@ -655,8 +744,8 @@ class PauseScene extends Phaser.Scene {
 
   create() {
     const overlay = this.add.graphics();
-    overlay.fillStyle(0x000000, 0.7);
-    overlay.fillRect(0, 0, 800, 600);
+  overlay.fillStyle(0x000000, 0.7);
+  overlay.fillRect(0, 0, 800, 600);
 
     this.add
       .text(400, 250, "PAUSA", {
@@ -712,11 +801,11 @@ class GameOverScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.tweens.add({
-      targets: gameOverText,
-      scale: { from: 1, to: 1.1 },
+    targets: gameOverText,
+    scale: { from: 1, to: 1.1 },
       duration: 500,
-      yoyo: true,
-      repeat: -1,
+    yoyo: true,
+    repeat: -1,
     });
 
     this.add
@@ -740,11 +829,11 @@ class GameOverScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.tweens.add({
-      targets: restartText,
-      alpha: { from: 1, to: 0.3 },
+    targets: restartText,
+    alpha: { from: 1, to: 0.3 },
       duration: 800,
-      yoyo: true,
-      repeat: -1,
+    yoyo: true,
+    repeat: -1,
     });
 
     this.input.keyboard.on("keydown", (event) => {
@@ -763,28 +852,34 @@ class GameOverScene extends Phaser.Scene {
   startGameOverMusic() {
     this.musicPlaying = true;
     this.musicTimer = 0;
-    this.musicNoteIndex = 0;
-    // Melodía muy triste y lenta - escala descendente más dramática
-    this.musicNotes = [523, 494, 440, 392, 349, 330, 294, 262, 247, 220, 196];
+    this.noteIndex = 0;
+    
+    // Progresión de acordes menores (triste)
+    this.melody = [392.00, 311.13, 261.63, 349.23, 293.66, 246.94]; // G, Eb, C | F, D, Bb
+    this.bassLine = [130.81, 146.83]; // C3, F3
+    this.bassIndex = 0;
   }
 
   update(time, delta) {
     if (!this.musicPlaying) return;
 
     this.musicTimer += delta;
-    // Muy lenta - 600ms entre notas para efecto más triste
+    
+    // Tocar una nota de la melodía lentamente
     if (this.musicTimer >= 600) {
       this.musicTimer = 0;
-      const note =
-        this.musicNotes[this.musicNoteIndex % this.musicNotes.length];
-      // Notas más largas y volumen más alto para que se note más
-      this.playTone(note, 500, 0.08, "sine");
-      this.musicNoteIndex++;
-
-      // Reiniciar cuando termine la secuencia completa
-      if (this.musicNoteIndex >= this.musicNotes.length) {
-        this.musicNoteIndex = 0;
+      
+      // Tocar bajo al inicio de la frase
+      if (this.noteIndex % 3 === 0) {
+        const bassNote = this.bassLine[this.bassIndex % this.bassLine.length];
+        this.playTone(bassNote, 1.8, 0.12, "sawtooth");
+        this.bassIndex++;
       }
+      
+      const note = this.melody[this.noteIndex % this.melody.length];
+      this.playTone(note, 0.5, 0.08, "triangle");
+      
+      this.noteIndex++;
     }
   }
 
@@ -797,7 +892,7 @@ class GameOverScene extends Phaser.Scene {
     osc.frequency.value = freq;
     osc.type = type;
     gain.gain.setValueAtTime(vol, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + dur);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + dur);
   }
