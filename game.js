@@ -227,6 +227,8 @@ class GameScene extends Phaser.Scene {
   generateSafeZones() {
     this.safeZones = [];
     const numZones = 3 + Math.floor(this.gameTime / 10000);
+    // Colores disponibles: azul, rojo, verde
+    const zoneColors = [0x0088ff, 0xff0000, 0x00ff00];
 
     for (let i = 0; i < numZones; i++) {
       const angle = ((Math.PI * 2) / numZones) * i + Math.random() * 0.5;
@@ -234,6 +236,8 @@ class GameScene extends Phaser.Scene {
       const x = this.arenaCenterX + Math.cos(angle) * dist;
       const y = this.arenaCenterY + Math.sin(angle) * dist;
       const radius = 40 + Math.random() * 30;
+      // Asignar color aleatorio
+      const color = zoneColors[Math.floor(Math.random() * zoneColors.length)];
 
       // Asegurar que está dentro de la arena
       const distFromCenter = Math.sqrt(
@@ -243,9 +247,9 @@ class GameScene extends Phaser.Scene {
         const newDist = this.arenaRadius - radius - 20;
         const newX = this.arenaCenterX + Math.cos(angle) * newDist;
         const newY = this.arenaCenterY + Math.sin(angle) * newDist;
-        this.safeZones.push({ x: newX, y: newY, radius: radius });
+        this.safeZones.push({ x: newX, y: newY, radius: radius, color: color });
       } else {
-        this.safeZones.push({ x: x, y: y, radius: radius });
+        this.safeZones.push({ x: x, y: y, radius: radius, color: color });
       }
     }
   }
@@ -461,6 +465,26 @@ class GameScene extends Phaser.Scene {
   draw() {
     this.graphics.clear();
 
+    // Círculos concéntricos decorativos (órbitas internas) - solo decorativos
+    const orbit1Radius = this.arenaRadius * 0.4;
+    const orbit2Radius = this.arenaRadius * 0.65;
+    
+    // Órbita interna 1
+    this.graphics.lineStyle(2, 0xffff00, 0.4);
+    this.graphics.strokeCircle(
+      this.arenaCenterX,
+      this.arenaCenterY,
+      orbit1Radius
+    );
+    
+    // Órbita interna 2
+    this.graphics.lineStyle(2, 0xffaa00, 0.4);
+    this.graphics.strokeCircle(
+      this.arenaCenterX,
+      this.arenaCenterY,
+      orbit2Radius
+    );
+
     // Arena circular con glow (dibujar glow primero)
     this.drawGlowCircle(
       this.arenaCenterX,
@@ -476,13 +500,24 @@ class GameScene extends Phaser.Scene {
       this.arenaRadius
     );
 
-    // Zonas seguras con glow
+    // Zonas seguras con glow y colores aleatorios
     for (let zone of this.safeZones) {
-      this.drawGlowCircle(zone.x, zone.y, zone.radius, 0x00ff00, 0.3);
-      this.graphics.fillStyle(0x00ff00, 0.2);
+      const zoneColor = zone.color || 0x00ff00; // Color por defecto si no tiene
+      
+      // Glow del borde de la zona segura
+      this.drawGlowCircle(zone.x, zone.y, zone.radius, zoneColor, 0.5);
+      
+      // Relleno de la zona segura
+      this.graphics.fillStyle(zoneColor, 0.2);
       this.graphics.fillCircle(zone.x, zone.y, zone.radius);
-      this.graphics.lineStyle(2, 0x00ff00, 0.6);
+      
+      // Borde con glow
+      this.graphics.lineStyle(3, zoneColor, 0.8);
       this.graphics.strokeCircle(zone.x, zone.y, zone.radius);
+      
+      // Borde adicional para más glow
+      this.graphics.lineStyle(1, zoneColor, 0.4);
+      this.graphics.strokeCircle(zone.x, zone.y, zone.radius + 2);
     }
 
     // Campos de energía con glow
