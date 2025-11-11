@@ -158,6 +158,20 @@ class GameScene extends Phaser.Scene {
     this.lives = 3;
     this.gameTime = 0;
     this.paused = false;
+    
+    // Sistema de invencibilidad
+    this.invulnerable = false;
+    this.invulnerableTimer = 0;
+    this.invulnerableDuration = 1000; // 1 segundo de invencibilidad
+    
+    // Trail del jugador
+    this.playerTrail = [];
+    this.trailMaxLength = 15;
+    this.trailTimer = 0;
+    
+    // Animación de entrada
+    this.enteringGame = true;
+    this.enterAnimationTime = 0;
 
     // Campos de energía
     this.energyFields = [];
@@ -170,6 +184,9 @@ class GameScene extends Phaser.Scene {
 
     // Graphics
     this.graphics = this.add.graphics();
+    
+    // Iniciar animación de entrada - jugador viene desde fuera
+    this.startEnterAnimation();
 
     // UI
     this.scoreText = this.add.text(16, 16, "Puntos: 0", {
@@ -233,11 +250,47 @@ class GameScene extends Phaser.Scene {
     }
   }
 
+  startEnterAnimation() {
+    // Limpiar trail
+    this.playerTrail = [];
+    
+    // Posición inicial fuera de la pantalla (arriba)
+    this.player.x = 400;
+    this.player.y = -50;
+    
+    // Animación de entrada hacia el centro
+    this.tweens.add({
+      targets: this.player,
+      y: 300,
+      duration: 800,
+      ease: 'Power2',
+      onComplete: () => {
+        this.enteringGame = false;
+      }
+    });
+  }
+
   update(time, delta) {
     if (this.paused) return;
 
     this.gameTime += delta;
     this.updateBackgroundMusic(delta);
+    
+    // Actualizar invencibilidad
+    if (this.invulnerable) {
+      this.invulnerableTimer += delta;
+      if (this.invulnerableTimer >= this.invulnerableDuration) {
+        this.invulnerable = false;
+        this.invulnerableTimer = 0;
+      }
+    }
+    
+    // Si está en animación de entrada, no permitir movimiento
+    if (this.enteringGame) {
+      this.updateTrail(delta);
+      this.draw();
+      return;
+    }
 
     // Movimiento del jugador
     let dx = 0;
@@ -295,28 +348,34 @@ class GameScene extends Phaser.Scene {
       }
     }
 
-    // Colisiones con campos de energía
-    for (let field of this.energyFields) {
-      const dist = Math.sqrt(
-        Math.pow(this.player.x - field.x, 2) +
-          Math.pow(this.player.y - field.y, 2)
-      );
-      if (dist < field.radius + this.player.radius) {
-        this.takeDamage();
-        break;
-      }
-    }
-
-    // Verificar si está en zona segura
+    // Verificar PRIMERO si está en zona segura (con margen de seguridad)
     let inSafeZone = false;
     for (let zone of this.safeZones) {
       const dist = Math.sqrt(
         Math.pow(this.player.x - zone.x, 2) +
           Math.pow(this.player.y - zone.y, 2)
       );
-      if (dist < zone.radius - this.player.radius) {
+      // Verificar que el jugador esté completamente dentro de la zona segura
+      // Agregar un pequeño margen para evitar problemas de precisión
+      const margin = 2;
+      if (dist < zone.radius - this.player.radius - margin) {
         inSafeZone = true;
         break;
+      }
+    }
+
+    // Colisiones con campos de energía - SOLO si NO está en zona segura Y NO es invencible
+    if (!inSafeZone && !this.invulnerable) {
+      for (let field of this.energyFields) {
+        const dist = Math.sqrt(
+          Math.pow(this.player.x - field.x, 2) +
+            Math.pow(this.player.y - field.y, 2)
+        );
+        // Verificar colisión con margen
+        if (dist < field.radius + this.player.radius - 1) {
+          this.takeDamage();
+          break; // Solo un daño por frame
+        }
       }
     }
 
@@ -334,8 +393,25 @@ class GameScene extends Phaser.Scene {
       this.generateSafeZones();
     }
 
+    // Actualizar trail
+    this.updateTrail(delta);
+
     // Dibujar
     this.draw();
+  }
+  
+  updateTrail(delta) {
+    this.trailTimer += delta;
+    // Agregar posición al trail cada 30ms
+    if (this.trailTimer >= 30) {
+      this.trailTimer = 0;
+      this.playerTrail.push({ x: this.player.x, y: this.player.y });
+      
+      // Limitar longitud del trail
+      if (this.playerTrail.length > this.trailMaxLength) {
+        this.playerTrail.shift();
+      }
+    }
   }
 
   spawnEnergyField() {
@@ -361,8 +437,15 @@ class GameScene extends Phaser.Scene {
   }
 
   takeDamage() {
+    // Evitar múltiples daños en el mismo frame
+    if (this.invulnerable) return;
+    
     this.lives--;
     this.livesText.setText("Vida: " + this.lives);
+
+    // Activar invencibilidad temporal
+    this.invulnerable = true;
+    this.invulnerableTimer = 0;
 
     // Efecto visual
     this.cameras.main.flash(200, 255, 0, 0);
@@ -417,17 +500,35 @@ class GameScene extends Phaser.Scene {
       this.graphics.strokeCircle(field.x, field.y, field.radius);
     }
 
-    // Jugador con glow
+    // Trail del jugador (estela dorada)
+    for (let i = 0; i < this.playerTrail.length; i++) {
+      const trailPoint = this.playerTrail[i];
+      const alpha = (i + 1) / this.playerTrail.length * 0.6;
+      const size = this.player.radius * (i + 1) / this.playerTrail.length;
+      
+      // Glow del trail
+      this.graphics.fillStyle(0xffd700, alpha * 0.3);
+      this.graphics.fillCircle(trailPoint.x, trailPoint.y, size + 2);
+      
+      // Círculo del trail
+      this.graphics.fillStyle(0xffd700, alpha);
+      this.graphics.fillCircle(trailPoint.x, trailPoint.y, size);
+    }
+
+    // Jugador con glow dorado (parpadea si es invencible)
+    const playerAlpha = this.invulnerable && Math.floor(this.invulnerableTimer / 100) % 2 === 0 ? 0.3 : 1;
+    const playerColor = this.invulnerable && Math.floor(this.invulnerableTimer / 100) % 2 === 0 ? 0xffffff : 0xffd700;
+    
     this.drawGlowCircle(
       this.player.x,
       this.player.y,
       this.player.radius + 3,
-      0x00ffff,
-      0.6
+      playerColor,
+      0.8 * playerAlpha
     );
-    this.graphics.fillStyle(0xffffff, 1);
+    this.graphics.fillStyle(playerColor, playerAlpha);
     this.graphics.fillCircle(this.player.x, this.player.y, this.player.radius);
-    this.graphics.lineStyle(2, 0x00ffff, 1);
+    this.graphics.lineStyle(2, this.invulnerable ? 0xffffff : 0xffaa00, playerAlpha);
     this.graphics.strokeCircle(
       this.player.x,
       this.player.y,
