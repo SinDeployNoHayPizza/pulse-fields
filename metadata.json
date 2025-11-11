@@ -1,4 +1,4 @@
 {
-  "game_name": "<FILL THIS>",
-  "description": "<FILL THIS>"
+  "game_name": "Pulse Fields",
+  "description": "Arena circular con campos de energía expansivos. Mantente dentro de las zonas seguras generadas proceduralmente mientras evitas los campos de energía que se expanden y colisionan. Usa fórmulas trigonométricas para el movimiento y la expansión."
 }
